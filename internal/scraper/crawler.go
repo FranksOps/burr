@@ -30,6 +30,8 @@ type CrawlConfig struct {
 	RequestsPerSecond float64
 	// Jitter applies randomness to the rate limiter (0.0 to 1.0)
 	Jitter float64
+	// QueueSize limits the depth of the internal BFS queue (0 = default 10000)
+	QueueSize int
 }
 
 // Crawler coordinates the crawling of web pages starting from seeds.
@@ -81,7 +83,11 @@ func NewCrawler(cfg CrawlConfig, fetcher *Fetcher, logger *slog.Logger) *Crawler
 func (c *Crawler) Run(ctx context.Context, seeds []string) error {
 	defer c.limiter.Stop()
 
-	queue := make(chan job, 10000)
+	queueSize := c.cfg.QueueSize
+	if queueSize <= 0 {
+		queueSize = 10000 // default buffer size
+	}
+	queue := make(chan job, queueSize)
 
 	// Add seeds
 	for _, seed := range seeds {
@@ -96,6 +102,9 @@ func (c *Crawler) Run(ctx context.Context, seeds []string) error {
 
 	// A waitgroup just for tracking when all current queue items are processed,
 	// allowing us to know when the crawl is truly idle/done.
+	// Note: new jobs discovered during processing also increment the WaitGroup (wg.Add(1))
+	// before being sent to the queue. This pattern ensures we wait for both seed links
+	// and dynamically discovered links.
 	var jobsWg sync.WaitGroup
 	jobsWg.Add(len(queue))
 

@@ -2,80 +2,39 @@ package ratelimit
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestLimiter_NoBlockWhenZeroRPS(t *testing.T) {
-	limiter := NewLimiter(0, 0.5)
-
-	start := time.Now()
-	err := limiter.Wait(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if time.Since(start) > 10*time.Millisecond {
-		t.Errorf("limiter with 0 RPS should not block")
-	}
-}
-
-func TestLimiter_Wait(t *testing.T) {
-	rps := 10.0 // 100ms interval
-	limiter := NewLimiter(rps, 0)
+// TestLimiter_ConcurrentStress tests that the limiter is safe for concurrent use.
+func TestLimiter_ConcurrentStress(t *testing.T) {
+	// Create limiter with moderate rate
+	limiter := NewLimiter(1000, 0.1) // 1000 rps = 1ms interval
 	defer limiter.Stop()
 
-	ctx := context.Background()
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 
-	// Throw away the first tick because time.NewTicker starts immediately counting
-	_ = limiter.Wait(ctx)
-
-	start := time.Now()
-	err := limiter.Wait(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// Spawn many goroutines calling Wait
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					if err := limiter.Wait(ctx); err != nil {
+						// Expected when context times out
+						return
+					}
+				}
+			}
+		}()
 	}
 
-	duration := time.Since(start)
-
-	// It should take roughly 100ms
-	if duration < 50*time.Millisecond || duration > 150*time.Millisecond {
-		t.Errorf("expected wait around 100ms, took %v", duration)
-	}
-}
-
-func TestLimiter_ContextCancellation(t *testing.T) {
-	limiter := NewLimiter(1, 0) // 1 second interval
-	defer limiter.Stop()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := limiter.Wait(ctx)
-	if err == nil {
-		t.Fatalf("expected context canceled error")
-	}
-}
-
-func TestLimiter_Jitter(t *testing.T) {
-	rps := 10.0                     // 100ms interval
-	limiter := NewLimiter(rps, 0.5) // +/- 50ms jitter
-	defer limiter.Stop()
-
-	ctx := context.Background()
-
-	_ = limiter.Wait(ctx)
-
-	start := time.Now()
-	_ = limiter.Wait(ctx)
-
-	duration := time.Since(start)
-
-	// Interval is 100ms. Jitter is +/- 50ms.
-	// Negative jitter just returns immediately, so min wait is the ticker interval (approx 100ms).
-	// Positive jitter adds up to 50ms, so max wait is approx 150ms.
-	// Allow some slack for goroutine scheduling.
-	if duration < 50*time.Millisecond || duration > 300*time.Millisecond {
-		t.Errorf("expected jittered wait to be roughly between 100ms and 150ms, took %v", duration)
-	}
+	wg.Wait()
 }

@@ -94,6 +94,13 @@ func NewFetcher(cfg FetchConfig) (*Fetcher, error) {
 	}, nil
 }
 
+// Close releases resources associated with the Fetcher. Currently a no-op
+// because the underlying http.Client manages its own connection pool.
+// This method exists for API consistency and future extensibility.
+func (f *Fetcher) Close() error {
+	return nil
+}
+
 // Fetch executes a GET request to the target URL, tracking the duration and
 // capturing the response into a storage.ScrapeResult.
 func (f *Fetcher) Fetch(ctx context.Context, targetURL string) (*storage.ScrapeResult, error) {

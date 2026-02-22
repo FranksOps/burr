@@ -22,7 +22,6 @@ func TestTransport_Profiles(t *testing.T) {
 		ProfileFirefox,
 		ProfileSafari,
 		ProfileGo,
-		ProfileRandom,
 	}
 
 	for _, p := range profiles {

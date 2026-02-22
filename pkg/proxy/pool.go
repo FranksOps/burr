@@ -92,6 +92,10 @@ func (p *Pool) Add(rawURLs ...string) error {
 		if err != nil {
 			return fmt.Errorf("context: %w", err)
 		}
+		// Restrict to http, https, socks5 schemes
+		if u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "socks5" {
+			return fmt.Errorf("context: unsupported proxy scheme %q (must be http, https, or socks5)", u.Scheme)
+		}
 		p.proxies = append(p.proxies, &Proxy{
 			URL: u,
 		})

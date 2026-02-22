@@ -75,13 +75,18 @@ type Server struct {
 }
 
 // Start begins listening on the specified port and exposes /metrics.
+// The server runs in a background goroutine and must be stopped via Server.Stop()
+// to release resources and avoid leaks.
 func Start(port int) *Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+		Addr:         fmt.Sprintf("127.0.0.1:%d", port),
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func() {

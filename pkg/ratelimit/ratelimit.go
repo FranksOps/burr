@@ -76,6 +76,8 @@ func (l *Limiter) Wait(ctx context.Context) error {
 }
 
 // Stop releases any resources associated with the limiter.
+// It must be called to ensure the background goroutine from the ticker exits.
+// Failure to call Stop may cause goroutine leaks.
 func (l *Limiter) Stop() {
 	if l.ticker != nil {
 		l.ticker.Stop()
