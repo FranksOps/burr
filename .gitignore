@@ -56,3 +56,7 @@ report.txt
 
 # Local data directories
 data/
+
+# Always ignore .gitignore and backups
+.gitignore
+*.bak*
